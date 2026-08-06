@@ -1,0 +1,35 @@
+apiversion: multimodal_vlm_modelslim_v1
+metadata:
+  config_id: qwen3_asr_w8a8_experimental
+  score: 0
+  label:
+    w_bit: 8
+    a_bit: 8
+    is_sparse: False
+    kv_cache: False
+
+default_w8a8_dynamic: &default_w8a8_dynamic
+  act:
+    scope: "per_token"
+    dtype: "int8"
+    symmetric: True
+    method: "minmax"
+  weight:
+    scope: "per_channel"
+    dtype: "int8"
+    symmetric: True
+    method: "minmax"
+
+spec:
+  process:
+    - type: "linear_quant"
+      qconfig: *default_w8a8_dynamic
+      include:
+        - "model.layers.*"
+      exclude:
+        - "*audio_tower*"
+  save:
+    - type: "ascendv1_saver"
+      part_file_size: 4
+  dataset: "/home/y00899301/qwen3_asr_quant_dataset_official"
+  default_text: "Transcribe this audio accurately."
