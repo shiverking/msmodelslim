@@ -60,12 +60,22 @@ def test_model_identity_and_fp16_dtype(tmp_path):
 
 def test_legacy_pipeline_loads_full_outer_model(tmp_path):
     adapter = _make_adapter(tmp_path)
-    model = MagicMock()
-    model.eval.return_value = model
-    model.config = SimpleNamespace(use_cache=True)
-    model.thinker.config = SimpleNamespace(use_cache=True)
+
+    class FakeThinker(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.config = SimpleNamespace(use_cache=True)
+
+        def forward(self, **inputs):
+            return inputs["input_ids"] + 1
+
+    thinker = FakeThinker()
+    outer_model = MagicMock()
+    outer_model.eval.return_value = outer_model
+    outer_model.config = SimpleNamespace(use_cache=True)
+    outer_model.thinker = thinker
     model_class = MagicMock()
-    model_class.from_pretrained.return_value = model
+    model_class.from_pretrained.return_value = outer_model
     modeling = ModuleType(
         "qwen_asr.core.transformers_backend.modeling_qwen3_asr"
     )
@@ -79,9 +89,13 @@ def test_legacy_pipeline_loads_full_outer_model(tmp_path):
     ):
         result = adapter.load_model(DeviceType.CPU)
 
-    assert result is model
-    assert model.config.use_cache is False
-    assert model.thinker.config.use_cache is False
+    assert result.thinker is thinker
+    assert outer_model.config.use_cache is False
+    assert thinker.config.use_cache is False
+    assert torch.equal(
+        result(input_ids=torch.ones(1)),
+        torch.full((1,), 2.0),
+    )
     model_class.from_pretrained.assert_called_once_with(
         str(tmp_path),
         trust_remote_code=False,

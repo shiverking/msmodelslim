@@ -60,6 +60,18 @@ CALIBRATION_DTYPE = torch.float16
 DEFAULT_ASR_PROMPT = "Transcribe this audio accurately."
 
 
+class Qwen3ASRCalibrationModel(nn.Module):
+    """Expose the thinker forward while preserving its checkpoint prefix."""
+
+    def __init__(self, thinker: nn.Module):
+        super().__init__()
+        self.thinker = thinker
+        self.config = thinker.config
+
+    def forward(self, **inputs):
+        return self.thinker(**inputs)
+
+
 @logger_setter()
 class Qwen3ASRModelAdapter(
     VLMBaseModelAdapter,
@@ -189,7 +201,7 @@ class Qwen3ASRModelAdapter(
         except ImportError as error:
             raise ImportError("Please install qwen-asr==0.0.6.") from error
 
-        model = Qwen3ASRForConditionalGeneration.from_pretrained(
+        outer_model = Qwen3ASRForConditionalGeneration.from_pretrained(
             self.model_path,
             trust_remote_code=self.trust_remote_code,
             torch_dtype=CALIBRATION_DTYPE,
@@ -198,9 +210,9 @@ class Qwen3ASRModelAdapter(
             attn_implementation="eager",
             use_safetensors=True,
         ).eval()
-        model.config.use_cache = False
-        if hasattr(model, "thinker"):
-            model.thinker.config.use_cache = False
+        outer_model.config.use_cache = False
+        outer_model.thinker.config.use_cache = False
+        model = Qwen3ASRCalibrationModel(outer_model.thinker).eval()
         get_logger().info(
             "Initialized full Qwen3-ASR in FP16 for legacy W8A8S calibration."
         )
