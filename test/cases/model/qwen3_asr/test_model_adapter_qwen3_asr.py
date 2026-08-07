@@ -135,6 +135,9 @@ def test_w8a8s_config_keeps_non_decoder_modules_float():
     assert mix_cfg["*embed_tokens*"] == "float"
     assert mix_cfg["*lm_head*"] == "float"
     assert mix_cfg["thinker.model.layers.*.mlp.down_proj"] == "float"
+    assert config["spec"]["calib_dataset"] == (
+        "/home/y00899301/qwen3_asr_quant_dataset/index.jsonl"
+    )
 
 
 def test_subgraph_configuration_targets_only_text_decoder(tmp_path):
