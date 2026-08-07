@@ -9,12 +9,14 @@ from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import torch
+import yaml
 from safetensors import safe_open
 from safetensors.torch import save_file
 
 from msmodelslim.core.const import DeviceType
 from msmodelslim.infra.dataset_loader.vlm_dataset_loader import VlmCalibSample
 from msmodelslim.model.qwen3_asr.model_adapter import Qwen3ASRModelAdapter
+from msmodelslim.model.interface_hub import ModelSlimPipelineInterfaceV0
 from msmodelslim.utils.exception import InvalidDatasetError
 
 
@@ -53,6 +55,72 @@ def test_model_identity_and_fp16_dtype(tmp_path):
     assert adapter.get_model_pedigree() == "qwen3_asr"
     assert adapter.get_model_type() == "Qwen3-ASR-1.7B"
     assert adapter.get_global_model_torch_dtype() == torch.float16
+    assert isinstance(adapter, ModelSlimPipelineInterfaceV0)
+
+
+def test_legacy_pipeline_loads_full_outer_model(tmp_path):
+    adapter = _make_adapter(tmp_path)
+    model = MagicMock()
+    model.eval.return_value = model
+    model.config = SimpleNamespace(use_cache=True)
+    model.thinker.config = SimpleNamespace(use_cache=True)
+    model_class = MagicMock()
+    model_class.from_pretrained.return_value = model
+    modeling = ModuleType(
+        "qwen_asr.core.transformers_backend.modeling_qwen3_asr"
+    )
+    modeling.Qwen3ASRForConditionalGeneration = model_class
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "qwen_asr.core.transformers_backend.modeling_qwen3_asr": modeling,
+        },
+    ):
+        result = adapter.load_model(DeviceType.CPU)
+
+    assert result is model
+    assert model.config.use_cache is False
+    assert model.thinker.config.use_cache is False
+    model_class.from_pretrained.assert_called_once_with(
+        str(tmp_path),
+        trust_remote_code=False,
+        torch_dtype=torch.float16,
+        local_files_only=True,
+        device_map="cpu",
+        attn_implementation="eager",
+        use_safetensors=True,
+    )
+
+
+def test_legacy_batch_handler_processes_audio_sequentially(tmp_path):
+    adapter = _make_adapter(tmp_path)
+    adapter.handle_dataset = MagicMock(return_value=[{"input_ids": torch.ones(1)}])
+    dataset = [SimpleNamespace(audio="sample.wav", text="Transcribe.")]
+
+    result = adapter.handle_dataset_by_batch(dataset, 4, DeviceType.CPU)
+
+    assert result == [{"input_ids": torch.ones(1)}]
+    adapter.handle_dataset.assert_called_once_with(dataset, DeviceType.CPU)
+
+
+def test_w8a8s_config_keeps_non_decoder_modules_float():
+    repo_root = Path(__file__).parents[4]
+    config_path = (
+        repo_root
+        / "lab_practice"
+        / "qwen3_asr"
+        / "qwen3-asr-1.7b-w8a8s.yaml"
+    )
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    assert config["apiversion"] == "modelslim_v0"
+    assert config["metadata"]["label"]["is_sparse"] is True
+    mix_cfg = config["spec"]["calib_params"]["mix_cfg"]
+    assert mix_cfg["*audio_tower*"] == "float"
+    assert mix_cfg["*embed_tokens*"] == "float"
+    assert mix_cfg["*lm_head*"] == "float"
+    assert mix_cfg["thinker.model.layers.*.mlp.down_proj"] == "float"
 
 
 def test_subgraph_configuration_targets_only_text_decoder(tmp_path):

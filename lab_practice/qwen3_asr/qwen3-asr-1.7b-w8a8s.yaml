@@ -1,0 +1,33 @@
+apiversion: modelslim_v0
+metadata:
+  config_id: qwen3-asr-1.7b-w8a8s
+  score: 0
+  verified_model_types:
+    - Qwen3-ASR-1.7B
+  label:
+    w_bit: 8
+    a_bit: 8
+    is_sparse: True
+    kv_cache: False
+spec:
+  anti_cfg:
+    anti_method: m4
+  calib_cfg:
+    w_bit: 4
+    a_bit: 8
+    fraction: 0.011
+    co_sparse: True
+    use_sigma: True
+    is_lowbit: True
+    act_method: 2
+    sigma_factor: 4.0
+    mm_tensor: False
+  calib_params:
+    mix_cfg:
+      "*audio_tower*": "float"
+      "*embed_tokens*": "float"
+      "*lm_head*": "float"
+      "thinker.model.layers.*.mlp.down_proj": "float"
+  calib_dataset: /home/y00899301/qwen3_asr_quant_dataset/manifests/calibration_modelslim.jsonl
+  calib_save_params:
+    part_file_size: 4

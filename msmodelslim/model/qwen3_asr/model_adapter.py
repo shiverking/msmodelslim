@@ -43,6 +43,7 @@ from msmodelslim.model.interface_hub import (
     AscendV1SaveInterface,
     FlexSmoothQuantInterface,
     IterSmoothInterface,
+    ModelSlimPipelineInterfaceV0,
     ModelSlimPipelineInterfaceV1,
 )
 from msmodelslim.utils.exception import InvalidDatasetError
@@ -63,6 +64,7 @@ DEFAULT_ASR_PROMPT = "Transcribe this audio accurately."
 class Qwen3ASRModelAdapter(
     VLMBaseModelAdapter,
     ModelInfoInterface,
+    ModelSlimPipelineInterfaceV0,
     ModelSlimPipelineInterfaceV1,
     IterSmoothInterface,
     FlexSmoothQuantInterface,
@@ -163,6 +165,46 @@ class Qwen3ASRModelAdapter(
             )
         get_logger().info("Processed %d Qwen3-ASR audio samples.", len(processed_data))
         return processed_data
+
+    def handle_dataset_by_batch(
+        self,
+        dataset: Any,
+        batch_size: int,
+        device: DeviceType = DeviceType.NPU,
+    ) -> List[Any]:
+        """Keep audio calibration at batch size one for the legacy pipeline."""
+        if batch_size != 1:
+            get_logger().warning(
+                "Qwen3-ASR calibration only supports batch size 1; "
+                "processing samples sequentially."
+            )
+        return self.handle_dataset(dataset, device)
+
+    def load_model(self, device: DeviceType = DeviceType.NPU) -> nn.Module:
+        """Load the complete outer model for legacy W8A8S calibration."""
+        try:
+            from qwen_asr.core.transformers_backend.modeling_qwen3_asr import (
+                Qwen3ASRForConditionalGeneration,
+            )
+        except ImportError as error:
+            raise ImportError("Please install qwen-asr==0.0.6.") from error
+
+        model = Qwen3ASRForConditionalGeneration.from_pretrained(
+            self.model_path,
+            trust_remote_code=self.trust_remote_code,
+            torch_dtype=CALIBRATION_DTYPE,
+            local_files_only=True,
+            device_map="auto" if device == DeviceType.NPU else "cpu",
+            attn_implementation="eager",
+            use_safetensors=True,
+        ).eval()
+        model.config.use_cache = False
+        if hasattr(model, "thinker"):
+            model.thinker.config.use_cache = False
+        get_logger().info(
+            "Initialized full Qwen3-ASR in FP16 for legacy W8A8S calibration."
+        )
+        return model
 
     def init_model(self, device: DeviceType = DeviceType.NPU) -> nn.Module:
         """Load the audio tower and one decoder layer; load the rest on demand."""
