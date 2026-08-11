@@ -195,7 +195,12 @@ def test_dataset_handler_accepts_audio_only_samples(tmp_path):
     )
     fake_processor_class = MagicMock()
     fake_processor_class.from_pretrained.return_value = processor
-    adapter._collect_inputs_to_device = MagicMock(return_value={"ok": True})
+    adapter._collect_inputs_to_device = MagicMock(
+        return_value={
+            "ok": True,
+            "input_features": torch.ones((1, 2, 4), dtype=torch.float32),
+        }
+    )
 
     fake_modules = _fake_qwen_modules(fake_processor_class)
     fake_modules["librosa"] = SimpleNamespace(
@@ -213,7 +218,8 @@ def test_dataset_handler_accepts_audio_only_samples(tmp_path):
             DeviceType.CPU,
         )
 
-    assert result == [{"ok": True}]
+    assert result[0]["ok"] is True
+    assert result[0]["input_features"].dtype == torch.float16
     call_kwargs = processor.call_args.kwargs
     assert call_kwargs["return_tensors"] == "pt"
     assert call_kwargs["padding"] is True

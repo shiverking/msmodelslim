@@ -169,20 +169,23 @@ class Qwen3ASRModelAdapter(
             inputs = self._processor(
                 text=prompt, audio=waveform, return_tensors="pt", padding=True
             )
-            processed_data.append(
-                self._collect_inputs_to_device(
-                    inputs,
-                    device,
-                    keys=[
-                        "input_ids",
-                        "input_features",
-                        "attention_mask",
-                        "feature_attention_mask",
-                        "audio_feature_lengths",
-                        "position_ids",
-                    ],
-                )
+            processed_inputs = self._collect_inputs_to_device(
+                inputs,
+                device,
+                keys=[
+                    "input_ids",
+                    "input_features",
+                    "attention_mask",
+                    "feature_attention_mask",
+                    "audio_feature_lengths",
+                    "position_ids",
+                ],
             )
+            if processed_inputs["input_features"] is not None:
+                processed_inputs["input_features"] = processed_inputs[
+                    "input_features"
+                ].to(dtype=CALIBRATION_DTYPE)
+            processed_data.append(processed_inputs)
         if not processed_data:
             raise InvalidDatasetError(
                 "No valid audio samples found for Qwen3-ASR calibration.",
