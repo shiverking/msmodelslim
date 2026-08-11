@@ -79,6 +79,9 @@ class Qwen3ASRCalibrationModel(nn.Module):
     def forward(self, **inputs):
         return self.thinker(**inputs)
 
+    def generate(self, *args, **kwargs):
+        return self.thinker.generate(*args, **kwargs)
+
 
 @logger_setter()
 class Qwen3ASRModelAdapter(

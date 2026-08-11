@@ -86,6 +86,9 @@ def test_legacy_pipeline_loads_full_outer_model(tmp_path):
         def forward(self, **inputs):
             return inputs["input_ids"] + 1
 
+        def generate(self, **inputs):
+            return inputs["input_ids"] + 2
+
     thinker = FakeThinker()
     outer_model = MagicMock()
     outer_model.eval.return_value = outer_model
@@ -114,6 +117,10 @@ def test_legacy_pipeline_loads_full_outer_model(tmp_path):
     assert torch.equal(
         result(input_ids=torch.ones(1)),
         torch.full((1,), 2.0),
+    )
+    assert torch.equal(
+        result.generate(input_ids=torch.ones(1)),
+        torch.full((1,), 3.0),
     )
     model_class.from_pretrained.assert_called_once_with(
         str(tmp_path),
