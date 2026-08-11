@@ -61,7 +61,7 @@ class QuantServiceProxy(IQuantService):
         self.quant_service_config = quant_service_config
         self.dataset_loader = dataset_loader
         self.vlm_dataset_loader = vlm_dataset_loader
-        self._service_cache: Dict[str, IQuantService] = {}
+        self._service_cache: Dict[tuple[str, bool], IQuantService] = {}
         self.context_factory = context_factory
         self.debug_info_persistence = debug_info_persistence
 
@@ -74,17 +74,23 @@ class QuantServiceProxy(IQuantService):
             device_indices: Optional[List[int]] = None,
     ) -> None:
         api_version = quant_config.apiversion
-        dataset_loader = self._dataset_loader_for_apiversion(api_version)
-        if api_version not in self._service_cache:
+        use_vlm_dataset_loader = bool(
+            getattr(model_adapter, "USE_VLM_DATASET_LOADER", False)
+        )
+        dataset_loader = self._dataset_loader_for_apiversion(
+            api_version, use_vlm_dataset_loader
+        )
+        service_key = (api_version, use_vlm_dataset_loader)
+        if service_key not in self._service_cache:
             backend_config_class = load_plugin_config_class(QUANT_SERVICE_PLUGIN_GROUP, api_version)
             backend_config = backend_config_class(apiversion=api_version)
-            self._service_cache[api_version] = _QUANT_SERVICE_FACTORY.create(
+            self._service_cache[service_key] = _QUANT_SERVICE_FACTORY.create(
                 backend_config,
                 dataset_loader=dataset_loader,
                 context_factory=self.context_factory,
                 debug_info_persistence=self.debug_info_persistence,
             )
-        quant_service = self._service_cache[api_version]
+        quant_service = self._service_cache[service_key]
         quant_service.quantize(
             quant_config=quant_config,
             model_adapter=model_adapter,
@@ -93,8 +99,10 @@ class QuantServiceProxy(IQuantService):
             device_indices=device_indices,
         )
 
-    def _dataset_loader_for_apiversion(self, apiversion: str) -> DatasetLoaderInfra:
+    def _dataset_loader_for_apiversion(
+        self, apiversion: str, use_vlm_dataset_loader: bool = False
+    ) -> DatasetLoaderInfra:
         """按 apiversion 选择数据集加载器：VLM 用 vlm_dataset_loader，其余用 dataset_loader。"""
-        if apiversion == 'multimodal_vlm_modelslim_v1':
+        if apiversion == 'multimodal_vlm_modelslim_v1' or use_vlm_dataset_loader:
             return self.vlm_dataset_loader
         return self.dataset_loader

@@ -14,6 +14,7 @@ from safetensors import safe_open
 from safetensors.torch import save_file
 
 from msmodelslim.core.const import DeviceType
+from msmodelslim.core.quant_service.proxy.quant_service import QuantServiceProxy
 from msmodelslim.infra.dataset_loader.vlm_dataset_loader import VlmCalibSample
 from msmodelslim.model.qwen3_asr.model_adapter import Qwen3ASRModelAdapter
 from msmodelslim.model.interface_hub import ModelSlimPipelineInterfaceV0
@@ -56,6 +57,21 @@ def test_model_identity_and_fp16_dtype(tmp_path):
     assert adapter.get_model_type() == "Qwen3-ASR-1.7B"
     assert adapter.get_global_model_torch_dtype() == torch.float16
     assert isinstance(adapter, ModelSlimPipelineInterfaceV0)
+
+
+def test_legacy_pipeline_uses_vlm_dataset_loader(tmp_path):
+    adapter = _make_adapter(tmp_path)
+    file_loader = object()
+    vlm_loader = object()
+    proxy = QuantServiceProxy.__new__(QuantServiceProxy)
+    proxy.dataset_loader = file_loader
+    proxy.vlm_dataset_loader = vlm_loader
+
+    selected = proxy._dataset_loader_for_apiversion(
+        "modelslim_v0", adapter.USE_VLM_DATASET_LOADER
+    )
+
+    assert selected is vlm_loader
 
 
 def test_legacy_pipeline_loads_full_outer_model(tmp_path):

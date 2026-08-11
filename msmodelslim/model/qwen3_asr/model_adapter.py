@@ -84,6 +84,8 @@ class Qwen3ASRModelAdapter(
 ):
     """Layer-wise Qwen3-ASR adapter that quantizes only the text decoder."""
 
+    USE_VLM_DATASET_LOADER = True
+
     def __init__(
         self, model_type: str, model_path: str, trust_remote_code: bool = False
     ):
