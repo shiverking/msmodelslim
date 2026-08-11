@@ -68,6 +68,14 @@ class Qwen3ASRCalibrationModel(nn.Module):
         self.thinker = thinker
         self.config = thinker.config
 
+    @property
+    def device(self) -> torch.device:
+        return next(self.parameters()).device
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return next(self.parameters()).dtype
+
     def forward(self, **inputs):
         return self.thinker(**inputs)
 

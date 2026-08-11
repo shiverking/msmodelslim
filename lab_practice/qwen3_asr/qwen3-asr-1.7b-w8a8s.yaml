@@ -10,8 +10,6 @@ metadata:
     is_sparse: True
     kv_cache: False
 spec:
-  anti_cfg:
-    anti_method: m4
   calib_cfg:
     w_bit: 4
     a_bit: 8

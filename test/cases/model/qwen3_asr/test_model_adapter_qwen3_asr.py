@@ -80,6 +80,7 @@ def test_legacy_pipeline_loads_full_outer_model(tmp_path):
     class FakeThinker(torch.nn.Module):
         def __init__(self):
             super().__init__()
+            self.weight = torch.nn.Parameter(torch.ones(1))
             self.config = SimpleNamespace(use_cache=True)
 
         def forward(self, **inputs):
@@ -106,6 +107,8 @@ def test_legacy_pipeline_loads_full_outer_model(tmp_path):
         result = adapter.load_model(DeviceType.CPU)
 
     assert result.thinker is thinker
+    assert result.device == thinker.weight.device
+    assert result.dtype == thinker.weight.dtype
     assert outer_model.config.use_cache is False
     assert thinker.config.use_cache is False
     assert torch.equal(
@@ -145,6 +148,7 @@ def test_w8a8s_config_keeps_non_decoder_modules_float():
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
     assert config["apiversion"] == "modelslim_v0"
+    assert "anti_cfg" not in config["spec"]
     assert config["metadata"]["label"]["is_sparse"] is True
     mix_cfg = config["spec"]["calib_params"]["mix_cfg"]
     assert mix_cfg["*audio_tower*"] == "float"
